@@ -1,11 +1,19 @@
 package com.github.hzqd.ikfr.pastebin
 
+import com.google.common.hash.Hashing
 import io.vertx.core.Vertx
+import io.vertx.core.http.HttpHeaders
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
+import io.vertx.ext.web.handler.BodyHandler
 import org.redisson.Redisson
 import org.redisson.config.Config
+import java.lang.Exception
 import java.nio.charset.StandardCharsets
+import java.util.*
+import kotlin.math.absoluteValue
+import kotlin.random.Random
+import kotlin.random.nextUInt
 
 object App {
     val redissonClient = Config().let {
@@ -23,13 +31,16 @@ object App {
         return redissonMap[k]
     }
 
+
     @JvmStatic
     fun main(args: Array<String>) {
         val vertx = Vertx.vertx()
         val router = Router.router(vertx)
 
+        router.route().handler(BodyHandler.create())
         router.get("/").handler(::index)
         router.post("/paste").handler(::paste)
+        router.get("/*").handler(::query)
         vertx.createHttpServer().requestHandler(router).listen(8089)
     }
 
@@ -48,14 +59,20 @@ object App {
                 "    </form>\n" +
                 "</body>\n" +
                 "</html>")
-
-
-
     }
-    fun paste(context: RoutingContext) {
-        val content = context.request().getParam("content")
-        println(content)
+    fun paste(context: RoutingContext) = with(context) {
+        val content = request().getParam("content")
+        val key =  Integer.toHexString(content.hashCode()).slice((0..5))
+        set(key, content)
+        response().putHeader("location", key).setStatusCode(302).end()
     }
-
+    fun query(context: RoutingContext) {
+        try {
+            val content = get(context.request().uri().toString().slice(1..6))
+            context.response().end(content)
+        } catch (e: Exception) {
+            context.response().setStatusCode(404).end("not found")
+        }
+    }
 
 }
