@@ -13,6 +13,7 @@ dependencies {
     implementation(kotlin("stdlib-jdk8"))
     implementation("io.vertx:vertx-core:3.9.0")
     implementation("io.vertx:vertx-web:3.9.0")
+    implementation("io.vertx:vertx-web-templ-thymeleaf:3.9.0")
     implementation("org.redisson:redisson:3.12.4")
     implementation("io.arrow-kt:arrow-core:0.10.5")
     implementation("com.google.guava:guava:28.2-jre")
