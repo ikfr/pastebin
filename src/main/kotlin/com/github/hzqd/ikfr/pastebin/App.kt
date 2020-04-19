@@ -1,8 +1,6 @@
 package com.github.hzqd.ikfr.pastebin
 
-import arrow.core.None
-import arrow.core.Option
-import arrow.core.Some
+import arrow.core.*
 import io.vertx.core.Vertx
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.Router
@@ -11,39 +9,35 @@ import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.ext.web.handler.StaticHandler
 import io.vertx.ext.web.templ.thymeleaf.ThymeleafTemplateEngine
 import org.redisson.Redisson
-import org.redisson.api.RMap
 import org.redisson.config.Config
+import kotlin.system.exitProcess
 
 object App {
 
     val vertx = Vertx.vertx()
     val router = Router.router(vertx)
     val engine = ThymeleafTemplateEngine.create(vertx)
-    val redissonMap: Option<RMap<String, String>> = Option(
+
+    val redissonMap = try {
         Config().let {
             it.useSingleServer().address = "redis://127.0.0.1:6379"
             Redisson.create(it)
-        }.getMap("content")
-    )
+        }.getMap<String, String>("content")
+    } catch (e: Exception) {
+        println("Redis connection establish failed!")
+        exitProcess(1)
+    }
+
 
     fun set(k: String, v: String) {
-        return
-        when (redissonMap) {
-            is Some<RMap<String, String>> -> redissonMap.t[k] = v
-            is None -> println("None")
-        }
+        redissonMap[k] = v
     }
 
-    fun get(k: String): String = when (redissonMap) {
-        is Some<RMap<String, String>> -> redissonMap.t[k] ?: "None"
-        is None -> "None"
-    }
+    fun get(k: String): String? = redissonMap[k]
 
 
     @JvmStatic
     fun main(args: Array<String>) {
-    
-
         router.route().handler(BodyHandler.create())
         router.route("/static/*").handler(StaticHandler.create("webroot/static"))
 
@@ -55,13 +49,14 @@ object App {
     }
 
     fun index(context: RoutingContext) {
-        engine.render(JsonObject(), "webroot/templates/input.html") {
-        when {
-            it.succeeded() -> context.response().end(it.result())
-            else -> context.response().setStatusCode(500).end("Template file not Found!")
+        engine.render(JsonObject(), "webroot/templates/input.html") { rendering ->
+            when {
+                rendering.succeeded() -> context.response().end(rendering.result())
+                else -> context.response().setStatusCode(500).end("Template file not Found!")
+            }
         }
     }
-    }
+
     fun paste(context: RoutingContext) = with(context) {
         val content = request().getParam("content")
         val key = Integer.toHexString(content.hashCode()).slice((0..5))
@@ -70,11 +65,11 @@ object App {
     }
 
     fun query(context: RoutingContext) {
-        get(context.request().uri().toString().slice(1..6)).let {content ->
-            val replacectx = JsonObject()
+        get(context.request().uri().toString().slice(1..6)).let { content ->
+            val replaceCtx = JsonObject()
                 .put("content", content)
-                .put("id","raw" + context.request().uri())
-            engine.render(replacectx, "webroot/templates/result.html") {rendering ->
+                .put("id", "raw" + context.request().uri())
+            engine.render(replaceCtx, "webroot/templates/result.html") { rendering ->
                 when {
                     rendering.succeeded() -> context.response().end(rendering.result())
                     else -> context.response().setStatusCode(500).end("Template file not Found!")
@@ -84,8 +79,8 @@ object App {
     }
 
     fun raw(context: RoutingContext) {
-        get(context.request().uri().toString().slice(5..10)).let {content ->
-                context.response().end(content)
-            }
+        get(context.request().uri().toString().slice(5..10)).let { content ->
+            context.response().end(content)
         }
+    }
 }
